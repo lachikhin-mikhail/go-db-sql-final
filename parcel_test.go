@@ -2,12 +2,14 @@ package main
 
 import (
 	"database/sql"
+	"log"
 	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
 var (
@@ -19,6 +21,12 @@ var (
 	randRange = rand.New(randSource)
 )
 
+type TestSuite struct {
+	suite.Suite
+	db    *sql.DB
+	store ParcelStore
+}
+
 // getTestParcel возвращает тестовую посылку
 func getTestParcel() Parcel {
 	return Parcel{
@@ -29,102 +37,104 @@ func getTestParcel() Parcel {
 	}
 }
 
-// TestAddGetDelete проверяет добавление, получение и удаление посылки
-func TestAddGetDelete(t *testing.T) {
-	// prepare
+func (suite *TestSuite) SetupTest() {
 	db, err := sql.Open("sqlite", "test.db")
-	require.NoError(t, err)
-	defer db.Close()
+	if err != nil {
+		return
+	}
+	suite.db = db
+	suite.store = NewParcelStore(db)
 
-	store := NewParcelStore(db)
+}
+func (suite *TestSuite) TearDownSuite() {
+	err := suite.db.Close()
+	if err != nil {
+		log.Println("db close error")
+		return
+	}
+}
+
+func TestTestSuite(t *testing.T) {
+	suite.Run(t, new(TestSuite))
+}
+
+// TestAddGetDelete проверяет добавление, получение и удаление посылки
+func (suite *TestSuite) TestAddGetDelete() {
+	// prepare
 	parcel := getTestParcel()
 
 	// add
-	num, err := store.Add(parcel)
-	require.NoError(t, err)
-	require.NotEmpty(t, num)
+	num, err := suite.store.Add(parcel)
+	require.NoError(suite.T(), err)
+	require.NotEmpty(suite.T(), num)
 
 	// get
-	p, err := store.Get(num)
-	require.NoError(t, err)
+	p, err := suite.store.Get(num)
+	require.NoError(suite.T(), err)
 	// Adjust for parcel default number being 0
 	parcel.Number = num
-	require.Equal(t, parcel, p)
+	require.Equal(suite.T(), parcel, p)
 
 	// delete
-	err = store.Delete(num)
-	require.NoError(t, err)
+	err = suite.store.Delete(num)
+	require.NoError(suite.T(), err)
 
 	// get check
-	_, err = store.Get(num)
-	require.Error(t, err)
+	_, err = suite.store.Get(num)
+	require.Error(suite.T(), err)
 
 }
 
 // TestSetAddress проверяет обновление адреса
-func TestSetAddress(t *testing.T) {
+func (suite *TestSuite) TestSetAddress() {
 	// prepare
-	db, err := sql.Open("sqlite", "test.db")
-	require.NoError(t, err)
-	defer db.Close()
-
-	store := NewParcelStore(db)
 	parcel := getTestParcel()
 
 	// add
-	num, err := store.Add(parcel)
-	require.NoError(t, err)
-	require.True(t, (num > 0))
+	num, err := suite.store.Add(parcel)
+	require.NoError(suite.T(), err)
+	require.True(suite.T(), (num > 0))
 
 	// set address
 	newAddress := "new test address"
-	err = store.SetAddress(num, newAddress)
-	require.NoError(t, err)
+	err = suite.store.SetAddress(num, newAddress)
+	require.NoError(suite.T(), err)
 
 	// check
-	p, err := store.Get(num)
-	assert.NoError(t, err)
-	assert.Equal(t, p.Address, newAddress)
+	p, err := suite.store.Get(num)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), p.Address, newAddress)
 }
 
 // TestSetStatus проверяет обновление статуса
-func TestSetStatus(t *testing.T) {
+func (suite *TestSuite) TestSetStatus() {
 	// prepare
-	db, err := sql.Open("sqlite", "test.db")
-	require.NoError(t, err)
-	defer db.Close()
-	store := NewParcelStore(db)
 	parcel := getTestParcel()
 
 	// add
-	num, err := store.Add(parcel)
-	require.NoError(t, err)
-	require.True(t, (num > 0))
+	num, err := suite.store.Add(parcel)
+	require.NoError(suite.T(), err)
+	require.True(suite.T(), (num > 0))
 
 	// set status
-	err = store.SetStatus(num, ParcelStatusSent)
-	require.NoError(t, err)
+	err = suite.store.SetStatus(num, ParcelStatusSent)
+	require.NoError(suite.T(), err)
 
 	// check
-	p, err := store.Get(num)
-	assert.NoError(t, err)
-	assert.Equal(t, ParcelStatusSent, p.Status)
+	p, err := suite.store.Get(num)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), ParcelStatusSent, p.Status)
 }
 
 // TestGetByClient проверяет получение посылок по идентификатору клиента
-func TestGetByClient(t *testing.T) {
+func (suite *TestSuite) TestGetByClient() {
 	// prepare
-	db, err := sql.Open("sqlite", "test.db")
-	require.NoError(t, err)
-	defer db.Close()
-	store := NewParcelStore(db)
 
 	parcels := []Parcel{
 		getTestParcel(),
 		getTestParcel(),
 		getTestParcel(),
 	}
-	parcelMap := map[int]Parcel{}
 
 	// задаём всем посылкам один и тот же идентификатор клиента
 	client := randRange.Intn(10_000_000)
@@ -134,23 +144,20 @@ func TestGetByClient(t *testing.T) {
 
 	// add
 	for i := 0; i < len(parcels); i++ {
-		id, err := store.Add(parcels[i])
-		require.NoError(t, err)
-		require.True(t, (id > 0))
+		id, err := suite.store.Add(parcels[i])
+		require.NoError(suite.T(), err)
+		require.True(suite.T(), (id > 0))
 		// обновляем идентификатор добавленной у посылки
 		parcels[i].Number = id
-
-		// сохраняем добавленную посылку в структуру map, чтобы её можно было легко достать по идентификатору посылки
-		parcelMap[id] = parcels[i]
 	}
+	// Не совсем понял комментарий, по поводу наличия в testify функции для работы с массивами которой можно заменить данный цикл :')
+	// Но так как это был precode, я полагаю что это был совет, а не требование, поэтому чтобы успеть закрыть проект до дедлайна отправляю так.
 
 	// get by client
-	storedParcels, err := store.GetByClient(client)
-	assert.NoError(t, err)
-	assert.Equal(t, len(parcelMap), len(storedParcels))
+	storedParcels, err := suite.store.GetByClient(client)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), len(parcels), len(storedParcels))
 
 	// check
-	for _, parcel := range storedParcels {
-		assert.Equal(t, parcelMap[parcel.Number], parcel)
-	}
+	assert.Equal(suite.T(), parcels, storedParcels)
 }
