@@ -35,6 +35,7 @@ func TestAddGetDelete(t *testing.T) {
 	db, err := sql.Open("sqlite", "test.db")
 	require.NoError(t, err)
 	defer db.Close()
+
 	store := NewParcelStore(db)
 	parcel := getTestParcel()
 
@@ -45,19 +46,18 @@ func TestAddGetDelete(t *testing.T) {
 
 	// get
 	p, err := store.Get(num)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// Adjust for parcel default number being 0
 	parcel.Number = num
-	assert.Equal(t, parcel, p)
+	require.Equal(t, parcel, p)
 
 	// delete
 	err = store.Delete(num)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// get check
-	p, err = store.Get(num)
-	assert.Error(t, err)
-	assert.Empty(t, p)
+	_, err = store.Get(num)
+	require.Error(t, err)
 
 }
 
@@ -67,13 +67,14 @@ func TestSetAddress(t *testing.T) {
 	db, err := sql.Open("sqlite", "test.db")
 	require.NoError(t, err)
 	defer db.Close()
+
 	store := NewParcelStore(db)
 	parcel := getTestParcel()
 
 	// add
 	num, err := store.Add(parcel)
 	require.NoError(t, err)
-	require.NotEmpty(t, num)
+	require.True(t, (num > 0))
 
 	// set address
 	newAddress := "new test address"
@@ -98,7 +99,7 @@ func TestSetStatus(t *testing.T) {
 	// add
 	num, err := store.Add(parcel)
 	require.NoError(t, err)
-	require.NotEmpty(t, num)
+	require.True(t, (num > 0))
 
 	// set status
 	err = store.SetStatus(num, ParcelStatusSent)
@@ -135,7 +136,7 @@ func TestGetByClient(t *testing.T) {
 	for i := 0; i < len(parcels); i++ {
 		id, err := store.Add(parcels[i])
 		require.NoError(t, err)
-		require.NotEmpty(t, id)
+		require.True(t, (id > 0))
 		// обновляем идентификатор добавленной у посылки
 		parcels[i].Number = id
 

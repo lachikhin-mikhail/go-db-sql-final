@@ -23,12 +23,10 @@ func (s ParcelStore) Add(p Parcel) (int, error) {
 		sql.Named("created_at", p.CreatedAt))
 
 	if err != nil {
-		fmt.Println(err)
 		return 0, err
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
-		fmt.Println(err)
 		return 0, err
 	}
 
@@ -55,19 +53,21 @@ func (s ParcelStore) GetByClient(client int) ([]Parcel, error) {
 	rows, err := s.db.Query("SELECT number, client, status, address, created_at FROM parcel WHERE client = :client",
 		sql.Named("client", client))
 	if err != nil {
-		fmt.Println(err)
-		return []Parcel{}, err
+		return nil, err
 	}
 
 	var res []Parcel
+	// Было замечание что не закрыл курсор здесь, но следуя из документации, Next при возврате False курсор сам и закрывает
 	for rows.Next() {
 		p := Parcel{}
 		err := rows.Scan(&p.Number, &p.Client, &p.Status, &p.Address, &p.CreatedAt)
 		if err != nil {
-			fmt.Println(err)
-			return []Parcel{}, err
+			return nil, err
 		}
 		res = append(res, p)
+	}
+	if rows.Err() != nil {
+		return nil, err
 	}
 
 	return res, nil
@@ -79,7 +79,6 @@ func (s ParcelStore) SetStatus(number int, status string) error {
 		sql.Named("number", number))
 
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
@@ -94,7 +93,6 @@ func (s ParcelStore) SetAddress(number int, address string) error {
 		sql.Named("status", ParcelStatusRegistered))
 
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 	return nil
@@ -107,7 +105,6 @@ func (s ParcelStore) Delete(number int) error {
 		sql.Named("status", ParcelStatusRegistered))
 
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 	return nil
