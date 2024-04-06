@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"log"
 	"math/rand"
 	"testing"
 	"time"
@@ -37,7 +36,7 @@ func getTestParcel() Parcel {
 	}
 }
 
-func (suite *TestSuite) SetupTest() {
+func (suite *TestSuite) SetupSuite() {
 	db, err := sql.Open("sqlite", "test.db")
 	if err != nil {
 		return
@@ -48,10 +47,7 @@ func (suite *TestSuite) SetupTest() {
 }
 func (suite *TestSuite) TearDownSuite() {
 	err := suite.db.Close()
-	if err != nil {
-		log.Println("db close error")
-		return
-	}
+	require.NoError(suite.T(), err)
 }
 
 func TestTestSuite(t *testing.T) {
@@ -159,5 +155,5 @@ func (suite *TestSuite) TestGetByClient() {
 	assert.Equal(suite.T(), len(parcels), len(storedParcels))
 
 	// check
-	assert.Equal(suite.T(), parcels, storedParcels)
+	assert.ElementsMatch(suite.T(), parcels, storedParcels)
 }

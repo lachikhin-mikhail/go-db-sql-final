@@ -57,7 +57,7 @@ func (s ParcelStore) GetByClient(client int) ([]Parcel, error) {
 	}
 
 	var res []Parcel
-	// Было замечание что не закрыл курсор здесь, но следуя из документации, Next при возврате False курсор сам и закрывает
+
 	for rows.Next() {
 		p := Parcel{}
 		err := rows.Scan(&p.Number, &p.Client, &p.Status, &p.Address, &p.CreatedAt)
@@ -66,6 +66,9 @@ func (s ParcelStore) GetByClient(client int) ([]Parcel, error) {
 		}
 		res = append(res, p)
 	}
+
+	rows.Close()
+
 	if rows.Err() != nil {
 		return nil, err
 	}
