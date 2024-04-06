@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
 var (
@@ -18,6 +20,12 @@ var (
 	randRange = rand.New(randSource)
 )
 
+type TestSuite struct {
+	suite.Suite
+	db    *sql.DB
+	store ParcelStore
+}
+
 // getTestParcel возвращает тестовую посылку
 func getTestParcel() Parcel {
 	return Parcel{
@@ -28,67 +36,101 @@ func getTestParcel() Parcel {
 	}
 }
 
+func (suite *TestSuite) SetupSuite() {
+	db, err := sql.Open("sqlite", "test.db")
+	if err != nil {
+		return
+	}
+	suite.db = db
+	suite.store = NewParcelStore(db)
+
+}
+func (suite *TestSuite) TearDownSuite() {
+	err := suite.db.Close()
+	require.NoError(suite.T(), err)
+}
+
+func TestTestSuite(t *testing.T) {
+	suite.Run(t, new(TestSuite))
+}
+
 // TestAddGetDelete проверяет добавление, получение и удаление посылки
-func TestAddGetDelete(t *testing.T) {
+func (suite *TestSuite) TestAddGetDelete() {
 	// prepare
-	db, err := // настройте подключение к БД
-	store := NewParcelStore(db)
 	parcel := getTestParcel()
 
 	// add
-	// добавьте новую посылку в БД, убедитесь в отсутствии ошибки и наличии идентификатора
+	num, err := suite.store.Add(parcel)
+	require.NoError(suite.T(), err)
+	require.NotEmpty(suite.T(), num)
 
 	// get
-	// получите только что добавленную посылку, убедитесь в отсутствии ошибки
-	// проверьте, что значения всех полей в полученном объекте совпадают со значениями полей в переменной parcel
+	p, err := suite.store.Get(num)
+	require.NoError(suite.T(), err)
+	// Adjust for parcel default number being 0
+	parcel.Number = num
+	require.Equal(suite.T(), parcel, p)
 
 	// delete
-	// удалите добавленную посылку, убедитесь в отсутствии ошибки
-	// проверьте, что посылку больше нельзя получить из БД
+	err = suite.store.Delete(num)
+	require.NoError(suite.T(), err)
+
+	// get check
+	_, err = suite.store.Get(num)
+	require.Error(suite.T(), err)
+
 }
 
 // TestSetAddress проверяет обновление адреса
-func TestSetAddress(t *testing.T) {
+func (suite *TestSuite) TestSetAddress() {
 	// prepare
-	db, err := // настройте подключение к БД
+	parcel := getTestParcel()
 
 	// add
-	// добавьте новую посылку в БД, убедитесь в отсутствии ошибки и наличии идентификатора
+	num, err := suite.store.Add(parcel)
+	require.NoError(suite.T(), err)
+	require.True(suite.T(), (num > 0))
 
 	// set address
-	// обновите адрес, убедитесь в отсутствии ошибки
 	newAddress := "new test address"
+	err = suite.store.SetAddress(num, newAddress)
+	require.NoError(suite.T(), err)
 
 	// check
-	// получите добавленную посылку и убедитесь, что адрес обновился
+	p, err := suite.store.Get(num)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), p.Address, newAddress)
 }
 
 // TestSetStatus проверяет обновление статуса
-func TestSetStatus(t *testing.T) {
+func (suite *TestSuite) TestSetStatus() {
 	// prepare
-	db, err := // настройте подключение к БД
+	parcel := getTestParcel()
 
 	// add
-	// добавьте новую посылку в БД, убедитесь в отсутствии ошибки и наличии идентификатора
+	num, err := suite.store.Add(parcel)
+	require.NoError(suite.T(), err)
+	require.True(suite.T(), (num > 0))
 
 	// set status
-	// обновите статус, убедитесь в отсутствии ошибки
+	err = suite.store.SetStatus(num, ParcelStatusSent)
+	require.NoError(suite.T(), err)
 
 	// check
-	// получите добавленную посылку и убедитесь, что статус обновился
+	p, err := suite.store.Get(num)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), ParcelStatusSent, p.Status)
 }
 
 // TestGetByClient проверяет получение посылок по идентификатору клиента
-func TestGetByClient(t *testing.T) {
+func (suite *TestSuite) TestGetByClient() {
 	// prepare
-	db, err := // настройте подключение к БД
 
 	parcels := []Parcel{
 		getTestParcel(),
 		getTestParcel(),
 		getTestParcel(),
 	}
-	parcelMap := map[int]Parcel{}
 
 	// задаём всем посылкам один и тот же идентификатор клиента
 	client := randRange.Intn(10_000_000)
@@ -98,24 +140,20 @@ func TestGetByClient(t *testing.T) {
 
 	// add
 	for i := 0; i < len(parcels); i++ {
-		id, err := // добавьте новую посылку в БД, убедитесь в отсутствии ошибки и наличии идентификатора
-
+		id, err := suite.store.Add(parcels[i])
+		require.NoError(suite.T(), err)
+		require.True(suite.T(), (id > 0))
 		// обновляем идентификатор добавленной у посылки
 		parcels[i].Number = id
-
-		// сохраняем добавленную посылку в структуру map, чтобы её можно было легко достать по идентификатору посылки
-		parcelMap[id] = parcels[i]
 	}
+	// Не совсем понял комментарий, по поводу наличия в testify функции для работы с массивами которой можно заменить данный цикл :')
+	// Но так как это был precode, я полагаю что это был совет, а не требование, поэтому чтобы успеть закрыть проект до дедлайна отправляю так.
 
 	// get by client
-	storedParcels, err := // получите список посылок по идентификатору клиента, сохранённого в переменной client
-	// убедитесь в отсутствии ошибки
-	// убедитесь, что количество полученных посылок совпадает с количеством добавленных
+	storedParcels, err := suite.store.GetByClient(client)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), len(parcels), len(storedParcels))
 
 	// check
-	for _, parcel := range storedParcels {
-		// в parcelMap лежат добавленные посылки, ключ - идентификатор посылки, значение - сама посылка
-		// убедитесь, что все посылки из storedParcels есть в parcelMap
-		// убедитесь, что значения полей полученных посылок заполнены верно
-	}
+	assert.ElementsMatch(suite.T(), parcels, storedParcels)
 }
